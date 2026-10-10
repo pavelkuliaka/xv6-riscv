@@ -59,6 +59,11 @@ filedup(struct file *f)
 void
 fileclose(struct file *f)
 {
+  if (f->type == FD_MUTEX && holdingsleep(f->mutex)) {
+    printk("pid %d: fileclose: mutex %p, unlock\n", myproc()->pid, f->mutex);
+    releasesleep(f->mutex);
+  }
+
   struct file ff;
 
   acquire(&ftable.lock);
@@ -73,12 +78,15 @@ fileclose(struct file *f)
   f->type = FD_NONE;
   release(&ftable.lock);
 
+  
   if (ff.type == FD_PIPE) {
     pipeclose(ff.pipe, ff.writable);
   } else if (ff.type == FD_INODE || ff.type == FD_DEVICE) {
     begin_op();
     iput(ff.ip);
     end_op();
+  } else if (ff.type == FD_MUTEX) {
+    mutexclose(ff.mutex);
   }
 }
 
